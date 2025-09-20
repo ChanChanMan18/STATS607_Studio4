@@ -37,15 +37,21 @@ def bootstrap_sample(X, y, compute_stat, n_bootstrap=1000):
     ....
     """
 
+    # Checking n_bootstrap size
+    if n_bootstrap < 1:
+        raise ValueError(f'n_bootstrap has to be positive')
+    if n_bootstrap < 5:
+        warnings.warn("Small value of n_bootstrap; bootstrap_sample may be inaccurate")
+
     # Checking that X and y are of correct shape
-    if len(shape(X)) != 2:
-        raise ValueError, f'X has dimension {len(shape(X))} instead of 2'
-    if len(shape(y)) != 1:
-        raise ValueError, f'y has dimension {len(shape(y))} instead of 1'
-    if shape(X)[0] == 0 or shape(y)[0] == 0:
-        raise ValueError, 'X or y is an empty array'
-    if shape(X)[0] != shape(y)[0]:
-        raise ValueError, 'Lengths of X and y do not match'
+    if len(X.shape) != 2:
+        raise ValueError(f'X has dimension {len(X.shape)} instead of 2')
+    if len(y.shape) != 1:
+        raise ValueError(f'y has dimension {len(y.shape)} instead of 1')
+    if X.shape[0] == 0 or y.shape[0] == 0:
+        raise ValueError('X or y is an empty array')
+    if X.shape[0] != y.shape[0]:
+        raise ValueError('Lengths of X and y do not match')
 
     # Setup
     n = np.shape(y)[0] # Length of dataset
@@ -56,8 +62,8 @@ def bootstrap_sample(X, y, compute_stat, n_bootstrap=1000):
 
         # Randomizing the bootstrapped indexes
         rng = np.random.default_rng()
-        indexes = np.arange(n)
-        random_index = rng.choice(indexes, size=n_bootstrap, replace=True)
+        indexes = np.arange(n).astype(int)
+        random_index = list(rng.choice(indexes, size=n_bootstrap, replace=True))
 
         # Compute statistics on bootstrapped samples
         X_b = X[random_index]
@@ -96,6 +102,7 @@ def bootstrap_ci(bootstrap_stats, alpha=0.05):
     # Change into array if not one
     try:
         arr = np.asarray(bootstrap_stats)
+        # arr.sort()
     except Exception as message:
         raise TypeError("bootstrap_stats must be array-like") from message
 
@@ -105,6 +112,9 @@ def bootstrap_ci(bootstrap_stats, alpha=0.05):
     
     if arr.size == 0:
         raise ValueError("Input must have length greater than zero")
+    
+    if len(arr) < 10:
+        warnings.warn("Array size small; confidence interval may not be reliable")
     
     # The entries of array must be floats
     try:
@@ -156,12 +166,12 @@ class ComputeStatistics:
         if y.ndim != 1:
             raise ValueError("y must be a 1-D array of shape (n, ).")
         
+        if (X.shape[0] == 0 or X.shape[1] == 0 or y.size == 0):
+            raise ValueError("X and y must be nonempty")
+        
         # Check compatible dimensions
         if (X.shape[0] != len(y)):
             raise ValueError("First dimension of design and output must be equal")
-        
-        if (X.shape[0] == 0 or X.shape[1] == 0):
-            raise ValueError("X and y must be non-empty")
         
         # If output constant, R^2 undefined
         if np.allclose(y, y[0]):
@@ -173,7 +183,7 @@ class ComputeStatistics:
 
         return r_squared_statsmodels
     
-    def mean_of_output(self, y):
+    def mean_of_output(self, X, y):
         """
         Dummy statistic that computes mean of y
 
