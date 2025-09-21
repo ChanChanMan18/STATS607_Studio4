@@ -1,6 +1,8 @@
 import warnings
 import numpy as np
 import math
+from sklearn.metrics import r2_score
+from sklearn.linear_model import LinearRegression
 
 """
 Strong linear model in regression
@@ -11,11 +13,8 @@ Strong linear model in regression
         R^2 ~ Beta(p/2, (n-p-1)/2)
 """
 
-import numpy as np
-import statsmodels.api as sm
-import warnings
 
-def bootstrap_sample(X, y, compute_stat, n_bootstrap=1000):
+def bootstrap_sample(X, y, compute_stat, n_bootstrap_reps=200, n_bootstrap_samples=500):
     """
     Generate bootstrap distribution of a statistic
 
@@ -26,8 +25,10 @@ def bootstrap_sample(X, y, compute_stat, n_bootstrap=1000):
     y : array-like, shape (n,)
     compute_stat : callable
         Function that computes a statistic (float) from data (X, y)
-    n_bootstrap : int, default 1000
-        Number of bootstrap samples to generate
+    n_bootstrap_reps : int, default 200
+        Number of bootstrap repetitions to generate
+    n_bootstrap_samples : int, default 500
+        Number of bootstrap samples per bootstraping repetitions
 
     Returns
     -------
@@ -38,10 +39,15 @@ def bootstrap_sample(X, y, compute_stat, n_bootstrap=1000):
     """
 
     # Checking n_bootstrap size
-    if n_bootstrap < 1:
-        raise ValueError(f'n_bootstrap has to be positive')
-    if n_bootstrap < 5:
-        warnings.warn("Small value of n_bootstrap; bootstrap_sample may be inaccurate")
+    if n_bootstrap_reps < 1:
+        raise ValueError(f'n_bootstrap_reps has to be positive')
+    if n_bootstrap_samples < 1:
+        raise ValueError(f'n_bootstrap_samples has to be positive')
+    if n_bootstrap_reps < 5:
+        warnings.warn("Small value of n_bootstrap_reps; bootstrap_sample may be inaccurate")
+    if n_bootstrap_samples < 5:
+        warnings.warn("Small value of n_bootstrap_samples; bootstrap_sample may be inaccurate")
+
 
     # Checking that X and y are of correct shape
     if len(X.shape) != 2:
@@ -58,22 +64,22 @@ def bootstrap_sample(X, y, compute_stat, n_bootstrap=1000):
     output = []
 
     # Main loop
-    for _ in range(n_bootstrap):
+    for _ in range(n_bootstrap_reps):
 
         # Randomizing the bootstrapped indexes
         rng = np.random.default_rng()
         indexes = np.arange(n).astype(int)
-        random_index = list(rng.choice(indexes, size=n_bootstrap, replace=True))
+        random_index = list(rng.choice(indexes, size=n_bootstrap_samples, replace=True))
 
         # Compute statistics on bootstrapped samples
-        X_b = X[random_index]
-        y_b = y[random_index]
+        X_b = X[random_index].copy()
+        y_b = y[random_index].copy()
         output.append(compute_stat(X_b, y_b))
         
     # Return
     return np.array(output)
 
-def bootstrap_ci(bootstrap_stats, alpha=0.05):
+def bootstrap_ci(bootstrap_stats, alpha=0.05, rounding=True):
     """
     Calculate confidence interval from the bootstrap samples
 
@@ -102,7 +108,6 @@ def bootstrap_ci(bootstrap_stats, alpha=0.05):
     # Change into array if not one
     try:
         arr = np.asarray(bootstrap_stats)
-        # arr.sort()
     except Exception as message:
         raise TypeError("bootstrap_stats must be array-like") from message
 
@@ -128,11 +133,14 @@ def bootstrap_ci(bootstrap_stats, alpha=0.05):
     if lower_bound == upper_bound:
         warnings.warn("CI degenerated into point (lower == upper); bootstrap distribution may be discrete or too small", RuntimeWarning)
 
+    if rounding:
+        return (np.round(lower_bound, 4), np.round(upper_bound, 4))
     return (lower_bound, upper_bound)
 
 class ComputeStatistics:
 
-    def R_squared(self, X, y):
+    @staticmethod
+    def R_squared(X, y):
         """
         Calculate R-squared from multiple linear regression.
 
@@ -177,13 +185,15 @@ class ComputeStatistics:
         if np.allclose(y, y[0]):
             raise ValueError("R squared undefined for constant output")
 
-        model = sm.OLS(y, X)
-        results = model.fit()
-        r_squared_statsmodels = results.rsquared
+        model = LinearRegression()
+        model.fit(X, y)
+        y_pred = model.predict(X)
+        r_squared_statsmodels = r2_score(y, y_pred)
 
         return r_squared_statsmodels
     
-    def mean_of_output(self, X, y):
+    @staticmethod
+    def mean_of_output(X, y):
         """
         Dummy statistic that computes mean of y
 
@@ -199,5 +209,4 @@ class ComputeStatistics:
             mean of output 
         
         """
-
-        return np.mean(y)
+        return float(np.mean(y))
